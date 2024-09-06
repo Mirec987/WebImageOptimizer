@@ -12,6 +12,7 @@ class Program
         Run();
         Console.ReadKey();
     }
+
     static void Run()
     {
         Config config;
@@ -75,10 +76,15 @@ class Program
 
         List<string> unprocessedFiles = new List<string>();
 
-        foreach (var filePath in files)
+        object lockObject = new object();
+
+        Parallel.ForEach(files, filePath =>
         {
             FileInfo fileInfo = new FileInfo(filePath);
-            originalSizeTotal += fileInfo.Length;
+            lock (lockObject)
+            {
+                originalSizeTotal += fileInfo.Length;
+            }
 
             try
             {
@@ -99,20 +105,26 @@ class Program
 
                         if (quality.HasValue && quality.Value <= jpegQuality)
                         {
-                            File.Copy(filePath, Path.Combine(notEditedDirectory, fileInfo.Name));
-                            notEditedCount++;
-                            continue;
+                            lock (lockObject)
+                            {
+                                File.Copy(filePath, Path.Combine(fullNotEditedDirectory, fileInfo.Name));
+                                notEditedCount++;
+                            }
+                            return;
                         }
                     }
 
                     var options = new JpegEncoder { Quality = jpegQuality };
-                    string editedFilePath = Path.Combine(editedDirectory, Path.ChangeExtension(fileInfo.Name, ".jpg"));
+                    string editedFilePath = Path.Combine(fullEditedDirectory, Path.ChangeExtension(fileInfo.Name, ".jpg"));
                     image.Save(editedFilePath, options);
-                    editedCount++;
 
-                    FileInfo newFileInfo = new FileInfo(editedFilePath);
-                    newSizeTotal += newFileInfo.Length;
-                    isEdited = true;
+                    lock (lockObject)
+                    {
+                        editedCount++;
+                        FileInfo newFileInfo = new FileInfo(editedFilePath);
+                        newSizeTotal += newFileInfo.Length;
+                        isEdited = true;
+                    }
                 }
 
                 using (Image thumbnailImage = Image.Load(filePath))
@@ -124,19 +136,22 @@ class Program
                     }));
 
                     string thumbnailName = $"{Path.GetFileNameWithoutExtension(filePath)}_thumb.jpg";
-                    string thumbnailPath = Path.Combine(thumbnailDirectory, thumbnailName);
+                    string thumbnailPath = Path.Combine(fullThumbnailDirectory, thumbnailName);
                     thumbnailImage.Save(thumbnailPath, new JpegEncoder { Quality = jpegQuality });
                 }
             }
             catch (UnknownImageFormatException)
             {
-                unprocessedFiles.Add(fileInfo.Name);
+                lock (lockObject)
+                {
+                    unprocessedFiles.Add(fileInfo.Name);
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error processing file {fileInfo.Name}: {ex.Message}");
             }
-        }
+        });
 
         Console.WriteLine($"Number of edited images: {editedCount}");
         Console.WriteLine($"Number of unedited images: {notEditedCount}");
