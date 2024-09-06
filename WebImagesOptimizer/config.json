@@ -1,0 +1,9 @@
+{
+  "InputDirectory": "images",
+  "EditedDirectory": "edited",
+  "NotEditedDirectory": "not_edited",
+  "ThumbnailDirectory": "thumbs",
+  "JpegQuality": 80,
+  "ThumbnailWidth": 300,
+  "ThumbnailHeight": 225
+}
